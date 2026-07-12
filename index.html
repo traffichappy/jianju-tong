@@ -154,9 +154,8 @@
   <section class="card">
     <div class="step-title"><span class="step-num">5</span>檢舉包預覽</div>
     <div id="preview">完成上方步驟後自動產生（會自動帶入「我的」頁的檢舉人資料）。</div>
-    <button class="btn btn-dark btn-block" id="copyBtn">📋 複製檢舉包</button>
-    <button class="btn btn-red btn-block" id="saveGoBtn">💾 存入案件追蹤 ＋ 前往官方系統</button>
-    <button class="btn btn-ghost btn-block" id="saveDraftBtn">先存草稿，稍後送出</button>
+    <button class="btn btn-dark btn-block" id="copyBtn">📋 複製檢舉包（自動存為草稿）</button>
+    <button class="btn btn-red btn-block" id="saveGoBtn">🚀 送出：存入案件追蹤 ＋ 前往官方系統</button>
   </section>
 
   <div class="notice">⚠️ 違規行為終了後 <b>7日內</b> 須完成檢舉。官方系統需實名填寫，本APP會自動記住您的檢舉人資料（僅存於您的裝置）。</div>
@@ -168,6 +167,7 @@
 <div class="container">
   <div class="filterbar" id="filterbar"></div>
   <div id="caseList"></div>
+  <button class="btn btn-ghost btn-block" id="exportBtn">⬇️ 匯出全部案件（JSON備份）</button>
 </div>
 </div>
 
@@ -193,11 +193,6 @@
     <div class="field"><label>常用縣市</label><select id="meCity"></select></div>
     <button class="btn btn-blue btn-block" id="meSave">儲存</button>
     <p class="hint">身分證字號因安全考量不建議儲存，請於官方系統送出時自行填寫。所有資料只存在您的裝置，不會上傳。</p>
-  </section>
-  <section class="card">
-    <div class="step-title">🗂 資料管理</div>
-    <button class="btn btn-ghost btn-block" id="exportBtn">⬇️ 匯出全部案件（JSON備份）</button>
-    <button class="btn btn-ghost btn-block" id="wipeBtn" style="color:var(--primary)">🗑 清除全部資料</button>
   </section>
 </div>
 </div>
@@ -279,7 +274,7 @@ const dbGet = id => new Promise((res,rej)=>{const r=tx("readonly").get(id); r.on
 
 /* ================= 通用 ================= */
 const $ = id => document.getElementById(id);
-let photos = [], selVio = null, gpsCoord = "", curFilter = "all";
+let photos = [], selVio = null, gpsCoord = "", curFilter = "all", draftId = null;
 function toast(m){const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200);}
 const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
@@ -495,7 +490,19 @@ async function copyText(t){
 $("copyBtn").addEventListener("click", async ()=>{
   const r=buildReport();
   if(!r){toast("請先填寫違規資訊"); return;}
-  await copyText(r); toast("✅ 檢舉包已複製");
+  await copyText(r);
+  // 自動存成草稿（同一份表單只存一筆，重複複製會更新同一筆草稿）
+  if(currentVioName()){
+    const c=await collectCase("draft");
+    if(c){
+      if(draftId!=null){ c.id=draftId; await dbPut(c); }
+      else{ draftId=await dbAdd(c); }
+      updateCaseBadge();
+      toast("✅ 已複製檢舉包，並自動存為草稿");
+      return;
+    }
+  }
+  toast("✅ 檢舉包已複製");
 });
 
 /* ================= 存案件 ================= */
@@ -517,7 +524,7 @@ async function collectCase(status){
   };
 }
 function resetForm(){
-  photos=[]; drawThumbs(); selVio=null; gpsCoord="";
+  photos=[]; drawThumbs(); selVio=null; gpsCoord=""; draftId=null;
   document.querySelectorAll(".vio").forEach(x=>x.classList.remove("sel"));
   $("vioInfo").style.display="none";
   $("plateHint").textContent="加入照片後會自動嘗試辨識車牌；辨識失敗請手動輸入。";
@@ -528,15 +535,12 @@ function resetForm(){
   $("vTime").value=now.toTimeString().slice(0,5);
   render();
 }
-$("saveDraftBtn").addEventListener("click", async ()=>{
-  const c=await collectCase("draft"); if(!c) return;
-  await dbAdd(c); resetForm(); updateCaseBadge();
-  toast("💾 已存為草稿，可至「案件」頁查看");
-});
 $("saveGoBtn").addEventListener("click", async ()=>{
   const c=await collectCase("sent"); if(!c) return;
   await copyText(c.report);
-  await dbAdd(c); updateCaseBadge();
+  if(draftId!=null){ c.id=draftId; await dbPut(c); }  // 已自動存過草稿→升級同一筆，不重複建檔
+  else await dbAdd(c);
+  updateCaseBadge();
   const url=(CITIES.find(x=>x[0]===c.city)||CITIES[CITIES.length-1])[1];
   resetForm();
   toast("✅ 已存入案件＋複製檢舉包，正在開啟官方系統…");
@@ -665,13 +669,6 @@ $("exportBtn").addEventListener("click", async ()=>{
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download="檢舉案件備份.json"; a.click();
   toast("⬇️ 已下載備份");
-});
-$("wipeBtn").addEventListener("click", async ()=>{
-  if(!confirm("確定清除全部案件與個人資料？此動作無法復原。")) return;
-  const all=await dbAll();
-  for(const c of all) await dbDel(c.id);
-  localStorage.removeItem("profile");
-  fillProfileUI(); drawCases(); updateCaseBadge(); toast("已清除全部資料");
 });
 </script>
 </body>
