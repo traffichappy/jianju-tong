@@ -174,6 +174,7 @@
 <!-- ============ 頁3：統計 ============ -->
 <div class="page" id="pg-stats">
 <div class="container">
+  <a class="btn btn-blue btn-block" href="stats.html" style="display:block;text-align:center;text-decoration:none;margin-top:14px">🌏 查看全體統計儀表板（所有使用者）</a>
   <div class="statgrid" id="statGrid"></div>
   <section class="card"><div class="step-title">📊 違規類型分布</div><div id="vioBars"><p class="hint">尚無資料</p></div></section>
   <section class="card"><div class="step-title">📅 每月檢舉數</div><div id="monthBars"><p class="hint">尚無資料</p></div></section>
@@ -194,6 +195,15 @@
     <button class="btn btn-blue btn-block" id="meSave">儲存</button>
     <p class="hint">身分證字號因安全考量不建議儲存，請於官方系統送出時自行填寫。所有資料只存在您的裝置，不會上傳。</p>
   </section>
+  <section class="card">
+    <div class="step-title">🌏 匿名統計</div>
+    <label style="display:flex;align-items:flex-start;gap:10px;font-size:.88rem;cursor:pointer">
+      <input type="checkbox" id="statsOpt" style="width:auto;margin-top:3px" checked>
+      <span>參與全體匿名統計：存案件時僅回傳「違規類型＋縣市」兩項，<b>不含</b>車牌、地址、照片、時間細節或任何個資。</span>
+    </label>
+    <p class="hint">全體數據公開於 <a href="stats.html">全體統計儀表板</a>，讓大家看見台灣交通違規熱點。</p>
+  </section>
+  <p class="hint" style="text-align:center;margin:16px 0">檢舉通唯一官方網址：traffichappy.github.io/jianju-tong</p>
 </div>
 </div>
 
@@ -271,6 +281,20 @@ const dbPut = c => new Promise((res,rej)=>{const r=tx("readwrite").put(c); r.ons
 const dbDel = id => new Promise((res,rej)=>{const r=tx("readwrite").delete(id); r.onsuccess=()=>res(); r.onerror=rej;});
 const dbAll = () => new Promise((res,rej)=>{const r=tx("readonly").getAll(); r.onsuccess=()=>res(r.result); r.onerror=rej;});
 const dbGet = id => new Promise((res,rej)=>{const r=tx("readonly").get(id); r.onsuccess=()=>res(r.result); r.onerror=rej;});
+
+/* ================= 全體匿名統計（Supabase）================= */
+const SB_URL="https://aiarxitxszsvumnezqzr.supabase.co";
+const SB_KEY="sb_publishable_jnTrGsKlCEveelLPP1ra1Q_qmnMQ9My";
+function reportStat(vio,city){
+  try{
+    if(localStorage.getItem("statsOptOut")==="1") return;   // 使用者關閉匿名統計
+    fetch(SB_URL+"/rest/v1/stats",{
+      method:"POST",
+      headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY, "Content-Type":"application/json", Prefer:"return=minimal"},
+      body:JSON.stringify({vio:String(vio||"").slice(0,30), city:String(city||"").slice(0,20)})
+    }).catch(()=>{});
+  }catch(e){}
+}
 
 /* ================= 通用 ================= */
 const $ = id => document.getElementById(id);
@@ -496,7 +520,7 @@ $("copyBtn").addEventListener("click", async ()=>{
     const c=await collectCase("draft");
     if(c){
       if(draftId!=null){ c.id=draftId; await dbPut(c); }
-      else{ draftId=await dbAdd(c); }
+      else{ draftId=await dbAdd(c); reportStat(c.vio,c.city); }
       updateCaseBadge();
       toast("✅ 已複製檢舉包，並自動存為草稿");
       return;
@@ -539,7 +563,7 @@ $("saveGoBtn").addEventListener("click", async ()=>{
   const c=await collectCase("sent"); if(!c) return;
   await copyText(c.report);
   if(draftId!=null){ c.id=draftId; await dbPut(c); }  // 已自動存過草稿→升級同一筆，不重複建檔
-  else await dbAdd(c);
+  else{ await dbAdd(c); reportStat(c.vio,c.city); }
   updateCaseBadge();
   const url=(CITIES.find(x=>x[0]===c.city)||CITIES[CITIES.length-1])[1];
   resetForm();
@@ -661,6 +685,11 @@ $("meSave").addEventListener("click", ()=>{
   localStorage.setItem("profile", JSON.stringify(p));
   if(p.city) $("citySel").value=p.city;
   render(); toast("✅ 已儲存，之後每次檢舉自動帶入");
+});
+$("statsOpt").checked = localStorage.getItem("statsOptOut")!=="1";
+$("statsOpt").addEventListener("change", e=>{
+  localStorage.setItem("statsOptOut", e.target.checked ? "0" : "1");
+  toast(e.target.checked ? "已開啟匿名統計" : "已關閉匿名統計");
 });
 $("exportBtn").addEventListener("click", async ()=>{
   const all=await dbAll();
