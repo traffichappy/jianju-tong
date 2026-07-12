@@ -106,13 +106,15 @@
   <section class="card">
     <div class="step-title"><span class="step-num">1</span>拍下違規證據</div>
     <div class="row">
-      <label class="photo-btn" for="cameraInput" style="flex:1">📷 直接拍照</label>
-      <label class="photo-btn" for="photoInput" style="flex:1">🖼 從相簿選擇</label>
+      <label class="photo-btn" for="cameraInput" style="flex:1;padding:14px 4px">📷 拍照</label>
+      <label class="photo-btn" for="videoInput" style="flex:1;padding:14px 4px">🎥 錄影</label>
+      <label class="photo-btn" for="photoInput" style="flex:1;padding:14px 4px">🖼 相簿</label>
     </div>
     <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+    <input type="file" id="videoInput" accept="video/*" capture="environment" hidden>
     <input type="file" id="photoInput" accept="image/*,video/*" multiple hidden>
     <div id="thumbs"></div>
-    <p class="hint">建議清楚拍到「車牌＋違規事實＋周邊環境」，2張以上更有力。加入照片後會自動嘗試辨識車牌。</p>
+    <p class="hint">動態違規（闖紅燈、逆向、未禮讓行人等）建議用「錄影」或連續拍2張以上照片，才能證明違規過程；靜態違停拍出車牌＋標線＋周邊環境即可。加入照片後會自動嘗試辨識車牌。</p>
   </section>
 
   <section class="card">
@@ -360,6 +362,7 @@ function addPhotos(e){
 }
 $("photoInput").addEventListener("change", addPhotos);
 $("cameraInput").addEventListener("change", addPhotos);
+$("videoInput").addEventListener("change", addPhotos);
 
 /* ================= 車牌辨識（Tesseract.js OCR，失敗不影響其他功能）================= */
 let tessPromise=null;
