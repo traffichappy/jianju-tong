@@ -174,10 +174,16 @@
 <!-- ============ 頁3：統計 ============ -->
 <div class="page" id="pg-stats">
 <div class="container">
-  <a class="btn btn-blue btn-block" href="stats.html" style="display:block;text-align:center;text-decoration:none;margin-top:14px">🌏 查看全體統計儀表板（所有使用者）</a>
+  <p style="font-weight:700;margin:16px 0 0">📱 我的統計</p>
   <div class="statgrid" id="statGrid"></div>
   <section class="card"><div class="step-title">📊 違規類型分布</div><div id="vioBars"><p class="hint">尚無資料</p></div></section>
   <section class="card"><div class="step-title">📅 每月檢舉數</div><div id="monthBars"><p class="hint">尚無資料</p></div></section>
+  <p style="font-weight:700;margin:20px 0 0">🌏 全體統計（所有使用者）</p>
+  <div class="statgrid" id="gStatGrid"></div>
+  <section class="card"><div class="step-title">🚫 全體違規類型排行</div><div id="gVioBars"><p class="hint">載入中…</p></div></section>
+  <section class="card"><div class="step-title">🏙 縣市分布</div><div id="gCityBars"><p class="hint">載入中…</p></div></section>
+  <section class="card"><div class="step-title">📅 全體每月趨勢</div><div id="gMonthBars"><p class="hint">載入中…</p></div></section>
+  <p class="hint">全體統計為所有使用者匿名回傳之「違規類型＋縣市」彙總，不含任何個資。</p>
 </div>
 </div>
 
@@ -201,7 +207,7 @@
       <input type="checkbox" id="statsOpt" style="width:auto;margin-top:3px" checked>
       <span>參與全體匿名統計：存案件時僅回傳「違規類型＋縣市」兩項，<b>不含</b>車牌、地址、照片、時間細節或任何個資。</span>
     </label>
-    <p class="hint">全體數據公開於 <a href="stats.html">全體統計儀表板</a>，讓大家看見台灣交通違規熱點。</p>
+    <p class="hint">全體數據公開於「統計」分頁下方，讓大家看見台灣交通違規熱點。</p>
   </section>
   <p class="hint" style="text-align:center;margin:16px 0">檢舉通唯一官方網址：traffichappy.github.io/jianju-tong</p>
 </div>
@@ -354,7 +360,7 @@ $("meSave") && null; // placeholder
       t.classList.add("active");
       $("pg-"+t.dataset.pg).classList.add("active");
       if(t.dataset.pg==="cases") drawCases();
-      if(t.dataset.pg==="stats") drawStats();
+      if(t.dataset.pg==="stats"){ drawStats(); drawGlobalStats(); }
     });
   });
 
@@ -677,6 +683,38 @@ async function drawStats(){
   const maxM=Math.max(...mArr.map(x=>x[1]),1);
   $("monthBars").innerHTML=mArr.length?mArr.map(([n,v])=>
     `<div class="bar-row"><div class="bar-name">${esc(n)}</div><div class="bar-track"><div class="bar-fill" style="width:${v/maxM*100}%;background:linear-gradient(90deg,#5c6bc0,#3949ab)"></div></div><b>${v}</b></div>`).join(""):'<p class="hint">尚無資料</p>';
+}
+
+/* ================= 全體統計（統計分頁下方）================= */
+function gBars(el, entries, grad){
+  if(!entries.length){el.innerHTML='<p class="hint">尚無資料</p>';return;}
+  const max=Math.max(...entries.map(e=>e[1]),1);
+  el.innerHTML=entries.map(([n,v])=>
+    `<div class="bar-row"><div class="bar-name">${esc(n)}</div><div class="bar-track"><div class="bar-fill" style="width:${v/max*100}%;background:${grad}"></div></div><b>${v}</b></div>`).join("");
+}
+async function drawGlobalStats(){
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/stats?select=vio,city,created_at&order=created_at.desc&limit=50000",{
+      headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY}
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const rows=await r.json();
+    const now=Date.now();
+    const in30d=rows.filter(x=>now-new Date(x.created_at).getTime()<30*86400000).length;
+    $("gStatGrid").innerHTML=`
+      <div class="stat"><div class="n" style="color:var(--blue)">${rows.length.toLocaleString()}</div><div class="l">累計檢舉案件</div></div>
+      <div class="stat"><div class="n" style="color:var(--ok)">${in30d.toLocaleString()}</div><div class="l">近30天</div></div>`;
+    const agg=k=>{const m={};rows.forEach(x=>{const key=x[k]||"未知";m[key]=(m[key]||0)+1;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);};
+    gBars($("gVioBars"), agg("vio").slice(0,12), "linear-gradient(90deg,#f26b3a,#d93025)");
+    gBars($("gCityBars"), agg("city").slice(0,12), "linear-gradient(90deg,#5c6bc0,#3949ab)");
+    const bm={};
+    rows.forEach(x=>{const m=(x.created_at||"").slice(0,7); if(m)bm[m]=(bm[m]||0)+1;});
+    gBars($("gMonthBars"), Object.entries(bm).sort((a,b)=>a[0]<b[0]?-1:1), "linear-gradient(90deg,#66bb6a,#0f9d58)");
+  }catch(e){
+    $("gStatGrid").innerHTML="";
+    $("gVioBars").innerHTML='<p class="hint">⚠️ 全體統計載入失敗，請稍後再試。</p>';
+    $("gCityBars").innerHTML=""; $("gMonthBars").innerHTML="";
+  }
 }
 
 /* ================= 我的 ================= */
