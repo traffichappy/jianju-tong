@@ -187,6 +187,21 @@
 </div>
 </div>
 
+<!-- ============ 頁5：回饋 ============ -->
+<div class="page" id="pg-fb">
+<div class="container">
+  <section class="card">
+    <div class="step-title">💬 意見回饋</div>
+    <div class="field"><label>暱稱（選填）</label><input type="text" id="fbName" maxlength="20" placeholder="匿名"></div>
+    <div class="field"><label>您的建議或遇到的問題</label><textarea id="fbMsg" rows="4" maxlength="500" placeholder="例：希望增加ＸＸ功能、某步驟不好用、發現錯誤…"></textarea></div>
+    <button class="btn btn-red btn-block" id="fbSend">送出回饋</button>
+    <p class="hint">回饋為公開留言（請勿留個資），將用於改善檢舉通。</p>
+  </section>
+  <p style="font-weight:700;margin:20px 0 0">📝 大家的回饋</p>
+  <div id="fbList"><p class="hint">載入中…</p></div>
+</div>
+</div>
+
 <!-- ============ 頁4：我的 ============ -->
 <div class="page" id="pg-me">
 <div class="container">
@@ -218,6 +233,7 @@
   <button class="tab active" data-pg="report"><span class="ic">🚨</span>檢舉</button>
   <button class="tab" data-pg="cases"><span class="ic">📁</span>案件<span id="caseCount"></span></button>
   <button class="tab" data-pg="stats"><span class="ic">📊</span>統計</button>
+  <button class="tab" data-pg="fb"><span class="ic">💬</span>回饋</button>
   <button class="tab" data-pg="me"><span class="ic">👤</span>我的</button>
 </nav>
 
@@ -361,6 +377,7 @@ $("meSave") && null; // placeholder
       $("pg-"+t.dataset.pg).classList.add("active");
       if(t.dataset.pg==="cases") drawCases();
       if(t.dataset.pg==="stats"){ drawStats(); drawGlobalStats(); }
+      if(t.dataset.pg==="fb") drawFeedback();
     });
   });
 
@@ -716,6 +733,52 @@ async function drawGlobalStats(){
     $("gCityBars").innerHTML=""; $("gMonthBars").innerHTML="";
   }
 }
+
+/* ================= 意見回饋 ================= */
+function timeAgo(ts){
+  const s=(Date.now()-new Date(ts).getTime())/1000;
+  if(s<60) return "剛剛";
+  if(s<3600) return Math.floor(s/60)+" 分鐘前";
+  if(s<86400) return Math.floor(s/3600)+" 小時前";
+  return Math.floor(s/86400)+" 天前";
+}
+async function drawFeedback(){
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/feedback?select=nickname,message,created_at&order=created_at.desc&limit=50",{
+      headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY}
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const rows=await r.json();
+    $("fbList").innerHTML = rows.length ? rows.map(f=>`
+      <div class="case">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-size:.9rem">${esc(f.nickname)||"匿名"}</b>
+          <span class="hint" style="margin:0">${timeAgo(f.created_at)}</span>
+        </div>
+        <div style="font-size:.88rem;line-height:1.6;margin-top:6px;white-space:pre-wrap">${esc(f.message)}</div>
+      </div>`).join("") : '<div class="empty">還沒有留言，留下第一則建議吧！</div>';
+  }catch(e){
+    $("fbList").innerHTML='<p class="hint">⚠️ 留言載入失敗，請稍後再試。</p>';
+  }
+}
+$("fbSend").addEventListener("click", async ()=>{
+  const msg=$("fbMsg").value.trim();
+  if(!msg){toast("請先輸入建議內容"); return;}
+  const last=+localStorage.getItem("fbLast")||0;
+  if(Date.now()-last<60000){toast("留言太頻繁，請一分鐘後再試"); return;}
+  try{
+    const r=await fetch(SB_URL+"/rest/v1/feedback",{
+      method:"POST",
+      headers:{apikey:SB_KEY, Authorization:"Bearer "+SB_KEY, "Content-Type":"application/json", Prefer:"return=minimal"},
+      body:JSON.stringify({nickname:$("fbName").value.trim().slice(0,20), message:msg.slice(0,500)})
+    });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    localStorage.setItem("fbLast", Date.now());
+    $("fbMsg").value="";
+    toast("✅ 已送出，感謝您的建議！");
+    drawFeedback();
+  }catch(e){ toast("送出失敗，請稍後再試"); }
+});
 
 /* ================= 我的 ================= */
 $("meSave").addEventListener("click", ()=>{
