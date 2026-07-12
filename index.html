@@ -105,10 +105,14 @@
 
   <section class="card">
     <div class="step-title"><span class="step-num">1</span>拍下違規證據</div>
-    <label class="photo-btn" for="photoInput">📷 點我拍照或選擇照片／影片（可多張）</label>
-    <input type="file" id="photoInput" accept="image/*,video/*" capture="environment" multiple hidden>
+    <div class="row">
+      <label class="photo-btn" for="cameraInput" style="flex:1">📷 直接拍照</label>
+      <label class="photo-btn" for="photoInput" style="flex:1">🖼 從相簿選擇</label>
+    </div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+    <input type="file" id="photoInput" accept="image/*,video/*" multiple hidden>
     <div id="thumbs"></div>
-    <p class="hint">建議清楚拍到「車牌＋違規事實＋周邊環境」，2張以上更有力。照片會存進案件資料庫。</p>
+    <p class="hint">建議清楚拍到「車牌＋違規事實＋周邊環境」，2張以上更有力。加入照片後會自動嘗試辨識車牌。</p>
   </section>
 
   <section class="card">
@@ -120,11 +124,16 @@
     <div class="field"><label>違規地點</label><input type="text" id="vAddr" placeholder="按下方按鈕自動定位，或手動輸入"></div>
     <button class="gps-btn" id="gpsBtn">📍 GPS 自動定位</button>
     <p class="hint" id="gpsHint"></p>
+    <div class="field" style="margin-top:10px">
+      <label>違規發生縣市（依地址／GPS自動判定，可修改）</label>
+      <select id="citySel"></select>
+    </div>
   </section>
 
   <section class="card">
     <div class="step-title"><span class="step-num">3</span>違規類型</div>
     <div class="vio-grid" id="vioGrid"></div>
+    <div id="vioInfo" style="display:none;margin-top:10px;background:#fdeceb;border:1px solid #f5c6c2;border-radius:12px;padding:12px;font-size:.84rem;line-height:1.6"></div>
     <div class="other-input" id="otherWrap"><input type="text" id="otherText" placeholder="請簡述違規行為"></div>
   </section>
 
@@ -136,16 +145,13 @@
         <select id="vType"><option>自小客車</option><option>機車</option><option>大貨車</option><option>小貨車</option><option>大客車</option><option>計程車</option><option>其他</option></select>
       </div>
     </div>
+    <p class="hint" id="plateHint">加入照片後會自動嘗試辨識車牌；辨識失敗請手動輸入。</p>
     <div class="field"><label>補充說明（選填）</label><textarea id="note" rows="2" placeholder="例：占用超過10分鐘、駕駛滑手機…"></textarea></div>
   </section>
 
   <section class="card">
     <div class="step-title"><span class="step-num">5</span>檢舉包預覽</div>
     <div id="preview">完成上方步驟後自動產生（會自動帶入「我的」頁的檢舉人資料）。</div>
-    <div class="field" style="margin-top:12px">
-      <label>違規發生縣市（決定送往哪個官方系統）</label>
-      <select id="citySel"></select>
-    </div>
     <button class="btn btn-dark btn-block" id="copyBtn">📋 複製檢舉包</button>
     <button class="btn btn-red btn-block" id="saveGoBtn">💾 存入案件追蹤 ＋ 前往官方系統</button>
     <button class="btn btn-ghost btn-block" id="saveDraftBtn">先存草稿，稍後送出</button>
@@ -212,16 +218,25 @@
 <script>
 /* ================= 資料 ================= */
 const VIOLATIONS = [
-  {name:"紅線違規停車", law:"§56"},{name:"黃線違規停車", law:"§56"},
-  {name:"併排停車", law:"§56"},{name:"占用身障停車位", law:"§56"},
-  {name:"占用機車格／騎樓／人行道", law:"§56、§45"},{name:"闖紅燈", law:"§53"},
-  {name:"紅燈右轉", law:"§53-1"},{name:"逆向行駛", law:"§45"},
-  {name:"跨越雙黃線／雙白線", law:"§48"},{name:"違規迴轉", law:"§49"},
-  {name:"行駛人行道", law:"§45"},{name:"未禮讓行人", law:"§44"},
-  {name:"駕駛使用手機", law:"§31-1"},{name:"機車未戴安全帽", law:"§31"},
-  {name:"惡意逼車／危險駕駛", law:"§43"},{name:"未依規定使用方向燈", law:"§42"},
-  {name:"其他違規", law:"自行敘述"}
+  {name:"紅線違規停車", law:"§56", fine:"600～1,200", desc:"於劃設紅實線（禁止臨時停車）路段停車。"},
+  {name:"黃線違規停車", law:"§56", fine:"600～1,200", desc:"黃線僅准臨時停車3分鐘（駕駛不得離開），逾時或人離車即屬違規停車。"},
+  {name:"併排停車", law:"§56", fine:"2,400", desc:"與路邊停放車輛並排停車，嚴重影響車流與視線。"},
+  {name:"占用身障停車位", law:"§56", fine:"1,200", desc:"未懸掛專用識別證而停放於身心障礙者專用停車位。"},
+  {name:"占用機車格／騎樓／人行道", law:"§56、§45", fine:"600～1,200", desc:"汽車停放機車格，或於騎樓、人行道違規停車，妨礙行人通行。"},
+  {name:"闖紅燈", law:"§53", fine:"1,800～5,400", desc:"行經有燈光號誌管制之交岔路口，紅燈亮起後仍越過停止線進入路口。"},
+  {name:"紅燈右轉", law:"§53-1", fine:"600～1,800", desc:"紅燈時未依標誌指示逕行右轉。"},
+  {name:"逆向行駛", law:"§45", fine:"600～1,800", desc:"不依規定駛入來車道逆向行駛。"},
+  {name:"跨越雙黃線／雙白線", law:"§48", fine:"600～1,800", desc:"轉彎或變換車道時跨越禁止超車／變換車道之標線。"},
+  {name:"違規迴轉", law:"§49", fine:"600～1,800", desc:"於禁止迴車路段（如劃有雙黃線、設禁止迴車標誌處）迴轉。"},
+  {name:"行駛人行道", law:"§45", fine:"600～1,800", desc:"汽機車行駛於人行道，危及行人安全。"},
+  {name:"未禮讓行人", law:"§44", fine:"1,200～6,000", desc:"行近行人穿越道未暫停讓行人先通過（行人優先路權，近年重點加重執法）。"},
+  {name:"駕駛使用手機", law:"§31-1", fine:"汽車3,000／機車1,000", desc:"行駛中以手持方式使用手機、平板通話或操作。"},
+  {name:"機車未戴安全帽", law:"§31", fine:"500", desc:"機車駕駛或附載座人未戴安全帽。"},
+  {name:"惡意逼車／危險駕駛", law:"§43", fine:"6,000～36,000", desc:"任意驟然變換車道、逼近、驟然減速等危險方式駕車，情節重大得吊扣牌照。"},
+  {name:"未依規定使用方向燈", law:"§42", fine:"1,200～3,600", desc:"轉彎或變換車道未使用方向燈。"},
+  {name:"其他違規", law:"自行敘述", fine:"依條例規定", desc:"其他違規行為，請於下方簡述違規事實。"}
 ];
+const CITY_NAMES=["臺北市","新北市","桃園市","臺中市","臺南市","高雄市","基隆市","新竹市","嘉義市","新竹縣","苗栗縣","彰化縣","南投縣","雲林縣","嘉義縣","屏東縣","宜蘭縣","花蓮縣","臺東縣","澎湖縣","金門縣","連江縣"];
 const CITIES = [
   ["臺北市","https://prsweb.tcpd.gov.tw/"],
   ["新北市","https://tvrs.ntpd.gov.tw/Home/Report"],
@@ -293,6 +308,9 @@ $("meSave") && null; // placeholder
       document.querySelectorAll(".vio").forEach(x=>x.classList.remove("sel"));
       b.classList.add("sel"); selVio=v;
       $("otherWrap").style.display = v.name==="其他違規"?"block":"none";
+      const info=$("vioInfo");
+      info.style.display="block";
+      info.innerHTML=`<b>${v.name}</b>｜道路交通管理處罰條例 ${v.law}<br>${v.desc}<br>💰 罰鍰：新臺幣 ${v.fine} 元<span style="color:var(--muted);font-size:.76rem">（概略區間，實際金額以警方舉發與裁決機關裁定為準）</span>`;
       render();
     };
     $("vioGrid").appendChild(b);
@@ -305,6 +323,7 @@ $("meSave") && null; // placeholder
 
   ["vDate","vTime","vAddr","plate","note","otherText"].forEach(id=>$(id).addEventListener("input",render));
   $("vType").addEventListener("change",render);
+  $("vAddr").addEventListener("input",()=>applyCity(detectCity($("vAddr").value)));
 
   // 分頁
   document.querySelectorAll(".tab").forEach(t=>{
@@ -331,10 +350,55 @@ $("meSave") && null; // placeholder
 })();
 
 /* ================= 照片 ================= */
-$("photoInput").addEventListener("change", e=>{
-  [...e.target.files].forEach(f=>photos.push(f));
+function addPhotos(e){
+  const files=[...e.target.files];
+  files.forEach(f=>photos.push(f));
+  e.target.value="";
   drawThumbs(); render();
-});
+  const firstImg=files.find(f=>f.type.startsWith("image"));
+  if(firstImg) recognizePlate(firstImg);
+}
+$("photoInput").addEventListener("change", addPhotos);
+$("cameraInput").addEventListener("change", addPhotos);
+
+/* ================= 車牌辨識（Tesseract.js OCR，失敗不影響其他功能）================= */
+let tessPromise=null;
+function loadTess(){
+  if(!tessPromise){
+    tessPromise=new Promise((res,rej)=>{
+      const s=document.createElement("script");
+      s.src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.onload=res; s.onerror=()=>rej(new Error("OCR載入失敗"));
+      document.head.appendChild(s);
+    });
+  }
+  return tessPromise;
+}
+async function recognizePlate(file){
+  if($("plate").value.trim()) return;               // 已有車牌就不覆蓋
+  $("plateHint").textContent="🔍 車牌自動辨識中…（可先繼續填其他欄位）";
+  try{
+    await loadTess();
+    const img=await createImageBitmap(file);
+    const maxW=1400, sc=Math.min(1, maxW/img.width);
+    const cv=document.createElement("canvas");
+    cv.width=Math.round(img.width*sc); cv.height=Math.round(img.height*sc);
+    cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);
+    const {data}=await Tesseract.recognize(cv,"eng");
+    const txt=(data.text||"").toUpperCase();
+    const m=txt.match(/[A-Z]{3}\s?-?\s?\d{4}|[A-Z]{2,3}\s?-?\s?\d{3,4}|\d{3,4}\s?-?\s?[A-Z]{2,3}|\d{3}\s?-?\s?[A-Z]{3}/);
+    if(m && !$("plate").value.trim()){
+      let p=m[0].replace(/\s/g,"");
+      if(!p.includes("-")) p=p.replace(/^([A-Z]+)(\d+)$/,"$1-$2").replace(/^(\d+)([A-Z]+)$/,"$1-$2");
+      $("plate").value=p; render();
+      $("plateHint").textContent=`✅ 已自動辨識車牌：${p}（請確認，若有誤可直接修改）`;
+    }else{
+      $("plateHint").textContent="未能自動辨識車牌，請手動輸入（拍近一點、正對車牌成功率較高）。";
+    }
+  }catch(e){
+    $("plateHint").textContent="車牌辨識暫時無法使用，請手動輸入。";
+  }
+}
 function drawThumbs(){
   $("thumbs").innerHTML="";
   photos.forEach((f,i)=>{
@@ -351,9 +415,21 @@ function drawThumbs(){
 }
 
 /* ================= GPS ================= */
+function detectCity(text){
+  if(!text) return null;
+  const t=String(text).replace(/台/g,"臺");
+  for(const c of CITY_NAMES){ if(t.includes(c)) return c; }
+  return null;
+}
+function applyCity(name){
+  if(!name) return;
+  const opts=[...$("citySel").options].map(o=>o.value);
+  if(opts.includes(name)){ $("citySel").value=name; }
+  else{ const other=opts.find(v=>v.includes("其他縣市")); if(other) $("citySel").value=other; }
+}
 $("gpsBtn").addEventListener("click", ()=>{
-  if(!navigator.geolocation){$("gpsHint").textContent="裝置不支援定位，請手動輸入。"; return;}
-  $("gpsHint").textContent="定位中…";
+  if(!navigator.geolocation){$("gpsHint").textContent="此裝置或瀏覽器不支援定位，請手動輸入地址。"; return;}
+  $("gpsHint").textContent="定位中…（首次使用請在跳出的視窗按「允許」）";
   navigator.geolocation.getCurrentPosition(async pos=>{
     const {latitude:lat, longitude:lon}=pos.coords;
     gpsCoord=`${lat.toFixed(6)}, ${lon.toFixed(6)}`;
@@ -361,13 +437,21 @@ $("gpsBtn").addEventListener("click", ()=>{
       const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=zh-TW`);
       const j=await r.json(); const a=j.address||{};
       $("vAddr").value=[a.city||a.county||"",a.suburb||a.town||a.district||"",a.road||"",a.house_number?a.house_number+"號":""].join("")||j.display_name||gpsCoord;
-      $("gpsHint").textContent=`已定位：${gpsCoord}（可手動修正）`;
+      applyCity(detectCity(a.city||a.county||j.display_name));
+      $("gpsHint").textContent=`已定位：${gpsCoord}（地址與縣市已自動帶入，可手動修正）`;
     }catch(e){
       $("vAddr").value=gpsCoord;
-      $("gpsHint").textContent="無法轉換地址，已填GPS座標，請補路名。";
+      $("gpsHint").textContent="無法轉換地址，已填入GPS座標，請補充路名並確認縣市。";
     }
     render();
-  }, ()=>$("gpsHint").textContent="定位失敗（請允許定位權限），可手動輸入。", {enableHighAccuracy:true, timeout:10000});
+  }, err=>{
+    const tips={
+      1:"定位權限被拒絕。請這樣開啟：①按網址列旁的鎖頭/設定圖示 → 網站設定 → 位置 → 允許。②iPhone另需確認：設定 → 隱私權與安全性 → 定位服務 → Safari網站 → 允許。設好後再按一次定位，或直接手動輸入地址。",
+      2:"目前收不到位置訊號（室內或訊號遮蔽），請移至開闊處重試，或手動輸入地址。",
+      3:"定位逾時，請再按一次「GPS自動定位」，或手動輸入地址。"
+    };
+    $("gpsHint").textContent=tips[err.code]||"定位失敗，請手動輸入地址。";
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:30000});
 });
 
 /* ================= 檢舉包 ================= */
@@ -432,6 +516,8 @@ async function collectCase(status){
 function resetForm(){
   photos=[]; drawThumbs(); selVio=null; gpsCoord="";
   document.querySelectorAll(".vio").forEach(x=>x.classList.remove("sel"));
+  $("vioInfo").style.display="none";
+  $("plateHint").textContent="加入照片後會自動嘗試辨識車牌；辨識失敗請手動輸入。";
   $("otherWrap").style.display="none"; $("otherText").value="";
   $("plate").value=""; $("note").value=""; $("vAddr").value=""; $("gpsHint").textContent="";
   const now=new Date();
